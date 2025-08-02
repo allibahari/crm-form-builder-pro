@@ -1,0 +1,20 @@
+#field-repeater-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.field-row {
+    background: #f9f9f9;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: grid;
+    grid-template-columns: 2fr 1fr 100px 80px;
+    gap: 15px;
+    align-items: center;
+}
+.field-row label {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 5px;
+}
