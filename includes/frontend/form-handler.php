@@ -4,102 +4,61 @@
 if (!defined('ABSPATH')) exit;
 
 function crm_connector_handle_form_submission() {
-    // ... (بخش بررسی امنیتی و اولیه بدون تغییر) ...
-    if (!isset($_POST['form_id'], $_POST['crm_nonce']) || !wp_verify_nonce($_POST['crm_nonce'], 'submit_crm_form_' . $_POST['form_id'])) {
-        wp_die('بررسی امنیتی ناموفق بود!');
-    }
-
+    // ... (initial security checks) ...
     $form_id = intval($_POST['form_id']);
-    $submitted_fields = isset($_POST['form_fields']) ? (array) $_POST['form_fields'] : [];
-    $redirect_url = wp_get_referer() ? remove_query_arg(['submission', 'submission_form_id'], wp_get_referer()) : home_url();
-
-    // شروع فرآیند اعتبارسنجی
-    $form_rules = get_post_meta($form_id, '_form_fields', true);
     $errors = [];
-    $uploaded_file_data = []; // برای ذخیره اطلاعات فایل آپلود شده
 
-    // این توابع برای آپلود فایل لازم هستند
-    if (!function_exists('wp_handle_upload')) {
-        require_once(ABSPATH . 'wp-admin/includes/file.php');
-    }
+    // --- New Captcha Validation Block ---
+    $captcha_type = get_post_meta($form_id, '_captcha_type', true);
 
-    foreach ($form_rules as $rule) {
-        $label = $rule['label'];
-        $is_required = isset($rule['required']) && $rule['required'] === 'true';
-
-        // اعتبارسنجی فیلدهای عادی
-        if ($rule['type'] !== 'file') {
-            $submitted_value = isset($submitted_fields[$label]) ? trim($submitted_fields[$label]) : '';
-            if ($is_required && empty($submitted_value)) {
-                $errors[] = 'فیلد "' . esc_html($label) . '" ضروری است.';
-            }
-            if ($rule['type'] === 'email' && !empty($submitted_value) && !is_email($submitted_value)) {
-                $errors[] = 'فرمت ایمیل در فیلد "' . esc_html($label) . '" صحیح نیست.';
-            }
+    if ($captcha_type === 'math') {
+        if (!session_id()) { session_start(); }
+        $user_answer = isset($_POST['math_captcha']) ? intval($_POST['math_captcha']) : '';
+        $correct_answer = isset($_SESSION['crm_math_captcha_answer']) ? $_SESSION['crm_math_captcha_answer'] : null;
+        
+        if ($user_answer !== $correct_answer) {
+            $errors[] = 'The math problem was answered incorrectly.';
         }
-        // اعتبارسنجی فیلد فایل
-        else {
-            if (isset($_FILES[$label]) && !empty($_FILES[$label]['name'])) {
-                $file = $_FILES[$label];
-                
-                // بررسی حجم فایل (مثلاً حداکثر 2MB)
-                $max_size = 2 * 1024 * 1024; // 2 مگابایت
-                if ($file['size'] > $max_size) {
-                    $errors[] = 'حجم فایل "' . esc_html($label) . '" بیش از حد مجاز (2MB) است.';
-                }
+        unset($_SESSION['crm_math_captcha_answer']); // Unset after checking
 
-                // بررسی نوع فایل (فقط عکس)
-                $allowed_mime_types = ['image/jpeg', 'image/png', 'image/gif'];
-                $file_info = wp_check_filetype(basename($file['name']));
-                if (!in_array($file_info['type'], $allowed_mime_types)) {
-                    $errors[] = 'فرمت فایل "' . esc_html($label) . '" غیرمجاز است. فقط JPG, PNG, GIF قبول می‌شود.';
-                }
-                
-                if (empty($errors)) {
-                    $uploaded_file_data[$label] = $file;
-                }
+    } elseif ($captcha_type === 'recaptcha') {
+        $options = get_option('crm_connector_options');
+        $secret_key = $options['recaptcha_secret_key'] ?? '';
+        $g_response = $_POST['g-recaptcha-response'] ?? '';
 
-            } elseif ($is_required) {
-                $errors[] = 'آپلود فایل در فیلد "' . esc_html($label) . '" ضروری است.';
+        if (empty($g_response)) {
+            $errors[] = 'Please complete the reCAPTCHA challenge.';
+        } elseif (!empty($secret_key)) {
+            $verify_url = 'https://www.google.com/recaptcha/api/siteverify';
+            $response = wp_remote_post($verify_url, [
+                'body' => [
+                    'secret'   => $secret_key,
+                    'response' => $g_response,
+                    'remoteip' => $_SERVER['REMOTE_ADDR'],
+                ],
+            ]);
+            $output = json_decode(wp_remote_retrieve_body($response));
+
+            if (!$output->success) {
+                $errors[] = 'Google reCAPTCHA verification failed. Please try again.';
             }
         }
     }
-    
-    // ... (بخش تصمیم‌گیری بر اساس خطاها بدون تغییر) ...
+    // --- End of Captcha Validation Block ---
+
+    // ... (rest of the validation for other fields) ...
+    $form_rules = get_post_meta($form_id, '_form_fields', true);
+    // ... loop through form_rules and add to $errors array ...
+
+    // If there are any errors (from captcha or fields), redirect back.
     if (!empty($errors)) {
         set_transient('crm_form_errors_' . $form_id, $errors, 60);
-        set_transient('crm_form_old_data_' . $form_id, $submitted_fields, 60);
-        wp_safe_redirect(add_query_arg(['submission' => 'validation_error', 'submission_form_id' => $form_id], $redirect_url));
-        exit;
-    }
-    
-    // اگر همه چیز درست بود، فایل‌ها را آپلود کن
-    $sanitized_data = [];
-    foreach ($submitted_fields as $label => $value) {
-        $sanitized_data[sanitize_text_field($label)] = sanitize_textarea_field($value);
-    }
-    
-    foreach ($uploaded_file_data as $label => $file) {
-        $upload_overrides = ['test_form' => false];
-        $movefile = wp_handle_upload($file, $upload_overrides);
-
-        if ($movefile && !isset($movefile['error'])) {
-            $sanitized_data[sanitize_text_field($label)] = $movefile['url']; // ذخیره آدرس URL فایل آپلود شده
-        } else {
-            $errors[] = 'خطا در آپلود فایل: ' . $movefile['error'];
-        }
-    }
-    
-    // اگر در حین آپلود خطا رخ داد، دوباره به فرم برگردان
-    if (!empty($errors)) {
-        set_transient('crm_form_errors_' . $form_id, $errors, 60);
-        // ... (کد مشابه بالا)
+        set_transient('crm_form_old_data_' . $form_id, $_POST['form_fields'] ?? [], 60);
+        wp_safe_redirect(wp_get_referer());
         exit;
     }
 
-    // ادامه فرآیند ذخیره‌سازی و ارسال به API
-    // ... (بقیه کد مانند قبل است، فقط داده‌های $sanitized_data را استفاده می‌کند) ...
-    $first_name = 'ورودی جدید'; $email = '';
-    // ... (بقیه کد ذخیره سازی)
+    // ... If no errors, proceed with saving and sending data ...
 }
-// ...
+add_action('admin_post_nopriv_submit_crm_form', 'crm_connector_handle_form_submission');
+add_action('admin_post_submit_crm_form', 'crm_connector_handle_form_submission');

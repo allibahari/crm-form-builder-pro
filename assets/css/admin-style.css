@@ -17,4 +17,61 @@
     font-weight: 600;
     display: block;
     margin-bottom: 5px;
+}#field-repeater-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.field-row {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+}
+.field-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    cursor: move;
+    background-color: #f6f7f7;
+    border-bottom: 1px solid #ccd0d4;
+}
+.field-header .field-label-preview {
+    font-weight: 600;
+    flex-grow: 1;
+}
+.field-header .field-type-preview {
+    font-size: 12px;
+    color: #50575e;
+    background-color: #e0e0e0;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 15px;
+}
+.field-header .toggle-details, .field-header .remove-field-btn {
+    text-decoration: none;
+    margin-left: 10px;
+}
+.field-details {
+    padding: 15px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    border-top: 1px solid #fff;
+}
+.field-details.hidden {
+    display: none;
+}
+.field-details .form-field {
+    display: flex;
+    flex-direction: column;
+}
+.field-details label {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+.field-details input[type="text"], .field-details select {
+    width: 100%;
+}
+.field-details .full-width {
+    grid-column: 1 / -1;
 }

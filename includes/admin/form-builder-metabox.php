@@ -18,6 +18,20 @@ function crm_connector_render_form_builder_callback($post) {
     echo '<script>window.crm_form_fields = ' . json_encode($fields) . ';</script>';
 }
 
+// function crm_connector_save_form_fields($post_id) {
+//     if (!isset($_POST['_form_fields_nonce']) || !wp_verify_nonce($_POST['_form_fields_nonce'], 'save_form_fields')) return;
+//     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
+//     if (get_post_type($post_id) !== 'crm_form' || !current_user_can('edit_post', $post_id)) return;
+
+//     $new_fields = isset($_POST['_form_fields']) ? (array) $_POST['_form_fields'] : [];
+//     $sanitized_fields = [];
+//     foreach ($new_fields as $field) {
+//         if (empty($field['label'])) continue;
+//         $sanitized_fields[] = ['label' => sanitize_text_field($field['label']), 'type'  => sanitize_text_field($field['type']), 'required' => isset($field['required']) ? 'true' : 'false'];
+//     }
+//     update_post_meta($post_id, '_form_fields', $sanitized_fields);
+// }
+
 function crm_connector_save_form_fields($post_id) {
     if (!isset($_POST['_form_fields_nonce']) || !wp_verify_nonce($_POST['_form_fields_nonce'], 'save_form_fields')) return;
     if (defined('DOING_AUTOSAVE') && DOING_AUTOSAVE) return;
@@ -27,7 +41,14 @@ function crm_connector_save_form_fields($post_id) {
     $sanitized_fields = [];
     foreach ($new_fields as $field) {
         if (empty($field['label'])) continue;
-        $sanitized_fields[] = ['label' => sanitize_text_field($field['label']), 'type'  => sanitize_text_field($field['type']), 'required' => isset($field['required']) ? 'true' : 'false'];
+        $sanitized_fields[] = [
+            'label'       => sanitize_text_field($field['label']),
+            'type'        => sanitize_text_field($field['type']),
+            'placeholder' => sanitize_text_field($field['placeholder'] ?? ''),
+            'required'    => isset($field['required']) ? 'true' : 'false',
+            'minlength'   => isset($field['minlength']) ? absint($field['minlength']) : '',
+            'maxlength'   => isset($field['maxlength']) ? absint($field['maxlength']) : '',
+        ];
     }
     update_post_meta($post_id, '_form_fields', $sanitized_fields);
 }
